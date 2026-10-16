@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Overlays">
+<meta name="theme-color" content="#0e0e10">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Overlay Maker</title>
+<style>
+@font-face { font-family: OSReg;  src: url(data:font/ttf;base64,{{FONT_REG}}) format("truetype"); }
+@font-face { font-family: OSSemi; src: url(data:font/ttf;base64,{{FONT_SEMI}}) format("truetype"); }
+:root { --bg:#0e0e10; --card:#18181b; --line:#2a2a2e; --text:#f4f4f5; --dim:#a1a1aa; --gold:#FFD24A; --red:#ff6b5e; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin:0; background:var(--bg); color:var(--text); font-family: OSReg, -apple-system, system-ui, sans-serif; }
+body { padding: calc(env(safe-area-inset-top) + 10px) 14px calc(env(safe-area-inset-bottom) + 24px); max-width: 560px; margin: 0 auto; }
+h1 { font-family: OSSemi; font-size: 17px; margin: 4px 2px 12px; letter-spacing:.2px; }
+h1 span { color: var(--gold); }
+.chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin: 0 -14px 12px; padding-left:14px; padding-right:14px; scrollbar-width:none; }
+.chips::-webkit-scrollbar { display:none; }
+.chip { flex:0 0 auto; border:1px solid var(--line); background:var(--card); color:var(--text); padding:9px 14px; border-radius:999px; font: 14px OSSemi; }
+.chip.on { background:var(--gold); color:#111; border-color:var(--gold); }
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:12px; }
+label { display:block; font-size:12px; color:var(--dim); margin:8px 2px 4px; }
+label b { color:var(--gold); font-weight:normal; }
+input, textarea, select { width:100%; background:#0b0b0d; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:11px 12px; font: 16px OSReg; outline:none; }
+input:focus, textarea:focus { border-color:var(--gold); }
+textarea { min-height: 150px; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.hint { font-size:11.5px; color:var(--dim); margin:5px 2px 0; line-height:1.45; }
+.row { display:flex; gap:8px; align-items:center; }
+.row > * { flex:1; }
+.tline { display:flex; gap:6px; margin-top:8px; }
+.tline select { flex:0 0 88px; padding:11px 6px; }
+.tline input { flex:1; }
+.x { flex:0 0 40px; background:transparent; border:1px solid var(--line); color:var(--dim); border-radius:10px; font-size:18px; }
+.preview { position:relative; border-radius:14px; overflow:hidden; border:1px solid var(--line); background:#222; }
+#pv { display:block; width:100%; }
+.pvbar { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 0; }
+.seg { display:flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+.seg button { background:transparent; border:0; color:var(--dim); padding:7px 10px; font:12.5px OSSemi; }
+.seg button.on { background:#2d2d33; color:var(--text); }
+.btn { display:block; width:100%; border:0; border-radius:12px; padding:14px; font: 16px OSSemi; margin-top:10px; }
+.btn.primary { background:var(--gold); color:#111; }
+.btn.ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
+.btn:disabled { opacity:.45; }
+.btns { display:flex; gap:10px; } .btns .btn { flex:1; }
+details summary { list-style:none; cursor:pointer; font: 14px OSSemi; color:var(--text); padding:2px; }
+details summary::-webkit-details-marker { display:none; }
+details summary::after { content:"＋"; float:right; color:var(--dim); }
+details[open] summary::after { content:"－"; }
+input[type=range] { padding:0; height:30px; background:transparent; border:0; accent-color: var(--gold); }
+.val { font: 13px OSSemi; color:var(--gold); }
+.list .item { display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--line); }
+.list .item:last-child { border-bottom:0; }
+.list .n { flex:0 0 26px; font: 13px OSSemi; color:var(--dim); }
+.list .t { flex:1; min-width:0; }
+.list .t div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.list .t .s { font-size:12px; color:var(--dim); }
+.badge { font: 10.5px OSSemi; text-transform:uppercase; letter-spacing:.6px; color:var(--gold); }
+.empty { color:var(--dim); font-size:13px; padding:6px 2px; }
+.err { color:var(--red); font-size:13px; margin-top:8px; white-space:pre-wrap; }
+.toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 24px); transform:translateX(-50%) translateY(20px); background:#f4f4f5; color:#111; font:14px OSSemi; padding:10px 16px; border-radius:999px; opacity:0; transition:.25s; pointer-events:none; z-index:9; }
+.toast.on { opacity:1; transform:translateX(-50%) translateY(0); }
+.status { font-size:12px; color:var(--dim); text-align:center; margin-top:6px; min-height:16px; }
+</style>
+</head>
+<body>
+<h1>Overlay <span>·</span> Maker</h1>
+
+<div class="chips" id="chips"></div>
+
+<div class="card" id="fields"></div>
+
+<div class="preview"><canvas id="pv"></canvas></div>
+<div class="pvbar">
+  <div class="seg" id="segView"><button data-v="close" class="on">Close-up</button><button data-v="full">Full frame</button></div>
+  <div class="seg" id="segBg"><button data-v="grey" class="on">Grey</button><button data-v="dark">Dark</button><button data-v="bright">Bright</button><button data-v="photo">Photo…</button></div>
+  <input type="file" id="photo" accept="image/*" hidden>
+</div>
+
+<div class="btns">
+  <button class="btn primary" id="save" disabled>Save to Photos</button>
+  <button class="btn ghost" id="add" disabled>＋ Add to list</button>
+</div>
+<div class="status" id="status"></div>
+
+<div class="card" style="margin-top:12px">
+  <details>
+    <summary>Adjust</summary>
+    <label>Vertical position <span class="val" id="yv"></span></label>
+    <input type="range" id="y" min="150" max="1800" step="10">
+    <div class="hint">Centre of the text block, in timeline pixels (0 = top, 1920 = bottom). Default 1150.</div>
+    <label>Halo darkness <span class="val" id="hv"></span></label>
+    <input type="range" id="halo" min="0" max="200" step="5">
+    <div class="hint">Default 105.</div>
+    <label>Export size</label>
+    <div class="seg" id="segSize" style="display:inline-flex"><button data-v="full" class="on">Full frame</button><button data-v="tight">Text only</button></div>
+    <div class="hint">Full frame (2160×3840) drops into VN already positioned; just stretch it to fill. Text only gives a small PNG you place yourself.</div>
+    <button class="btn ghost" id="reset" style="padding:10px;font-size:14px">Reset to defaults</button>
+  </details>
+</div>
+
+<div class="card">
+  <div class="row" style="align-items:baseline">
+    <div style="font:14px OSSemi">Today's list <span id="cnt" style="color:var(--dim)"></span></div>
+    <div style="text-align:right;flex:0 0 auto"><button class="x" id="clear" style="width:auto;padding:4px 10px;font-size:12px">Clear</button></div>
+  </div>
+  <div class="list" id="list"><div class="empty">Add graphics as you go, then save them all at once.</div></div>
+  <button class="btn primary" id="saveAll" disabled>Save all to Photos</button>
+  <div class="hint">Save before switching to VN. If iOS closes this page in the background, the list is lost.</div>
+</div>
+
+<div class="card">
+  <details>
+    <summary>Paste blocks</summary>
+    <div class="hint" style="margin-bottom:8px">Write several graphics as text blocks, paste them here, and every block is added to the list.</div>
+    <textarea id="paste" placeholder="[food]&#10;time: 8:30 am&#10;name: Protein Shake&#10;kcal: 150&#10;protein: 40&#10;&#10;[exercise]&#10;name: Pull-ups&#10;sets: 8, 6, 5" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+    <button class="btn ghost" id="pasteGo">Add blocks to list</button>
+    <div class="err" id="pasteErr"></div>
+  </details>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+{{RENDER_JS}}
+</script>
+<script>
+(() => {
+const $ = (s) => document.querySelector(s);
+const TYPES = R.TYPES;
+const ORDER = ["intro", "moment", "food", "exercise", "workout", "weight", "total", "text"];
+const HINTS = {
+  sets: "12x12.5 = 12 reps at 12.5 kg  ·  8, 6, 5 = bodyweight reps  ·  45 sec = timed",
+  items: "Optional. Separate with  ·  — long lists wrap automatically.",
+  weight: "Optional. Fills in kg for plain rep counts, e.g. sets 10, 10, 8.",
+  ep: "", date: "Printed exactly as typed.",
+};
+const NUMERIC = new Set(["ep", "kcal", "protein", "kg", "prs", "target_kcal", "target_protein"]);
+const LOWER = new Set(["time", "sets"]);
+
+const S = {
+  type: "food", vals: {}, text: [["small", ""], ["main", ""], ["small", ""]],
+  y: R.DEFAULT_Y, halo: R.DEFAULT_HALO, tight: false, view: "close", bg: "grey", photo: null,
+  cur: null, blob: null, list: [], seq: 0,
+};
+ORDER.forEach((t) => (S.vals[t] = {}));
+const DEFAULTS = {};                                   // ?type.field=value prefills a field
+for (const [k, v] of new URLSearchParams(location.search)) {
+  const [t, f] = k.split(".");
+  if (TYPES[t] && f) { (DEFAULTS[t] ||= {})[f] = v; S.vals[t][f] = v; }
+}
+
+/* ───── template chips + fields ───── */
+function chips() {
+  $("#chips").innerHTML = ORDER.map((t) => `<button class="chip ${t === S.type ? "on" : ""}" data-t="${t}">${TYPES[t].label}</button>`).join("");
+}
+$("#chips").addEventListener("click", (e) => {
+  const t = e.target.closest(".chip")?.dataset.t; if (!t) return;
+  S.type = t; chips(); fields(); schedule(0);
+});
+
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+
+function fields() {
+  const box = $("#fields");
+  if (S.type === "text") {
+    box.innerHTML = `<div class="hint" style="margin:0 2px 2px">Free text. <b style="color:var(--gold)">Main</b> = bigger semibold line, Small = regular line.</div>
+      <div id="tl"></div><button class="btn ghost" id="tadd" style="padding:9px;font-size:14px">＋ Line</button>`;
+    const tl = $("#tl");
+    tl.innerHTML = S.text.map(([k, v], i) => `<div class="tline">
+        <select data-i="${i}"><option value="small" ${k === "small" ? "selected" : ""}>Small</option><option value="main" ${k === "main" ? "selected" : ""}>Main</option></select>
+        <input data-i="${i}" value="${esc(v)}" placeholder="Line ${i + 1}">
+        <button class="x" data-del="${i}">×</button></div>`).join("");
+    tl.oninput = tl.onchange = (e) => {
+      const i = +e.target.dataset.i; if (isNaN(i)) return;
+      if (e.target.tagName === "SELECT") S.text[i][0] = e.target.value; else S.text[i][1] = e.target.value;
+      schedule();
+    };
+    tl.onclick = (e) => { const d = e.target.dataset.del; if (d !== undefined) { S.text.splice(+d, 1); fields(); schedule(); } };
+    $("#tadd").onclick = () => { S.text.push(["small", ""]); fields(); };
+    return;
+  }
+  const v = S.vals[S.type];
+  box.innerHTML = TYPES[S.type].fields.map(([k, lab, ph, req]) => `
+    <label for="f_${k}">${lab}${req ? " <b>*</b>" : ""}</label>
+    <input id="f_${k}" data-k="${k}" value="${esc(v[k] ?? "")}" placeholder="e.g. ${esc(ph)}"
+      ${NUMERIC.has(k) ? 'inputmode="decimal"' : ""} ${LOWER.has(k) ? 'autocapitalize="off" autocorrect="off"' : ""}>
+    ${HINTS[k] ? `<div class="hint">${HINTS[k]}</div>` : ""}`).join("");
+  box.oninput = (e) => { const k = e.target.dataset.k; if (k) { S.vals[S.type][k] = e.target.value; schedule(); } };
+}
+
+/* ───── rendering ───── */
+const pv = $("#pv"), pctx = pv.getContext("2d");
+let timer = null, token = 0;
+function schedule(ms = 220) { clearTimeout(timer); $("#save").disabled = $("#add").disabled = true; status("…"); timer = setTimeout(draw, ms); }
+
+function currentLines() {
+  return S.type === "text" ? S.text.filter(([, v]) => v.trim()).map(([k, v]) => [v.trim(), k]) : R.build(S.type, S.vals[S.type]);
+}
+
+function status(s) { $("#status").textContent = s; }
+
+async function draw() {
+  const my = ++token;
+  const lines = currentLines();
+  if (S.cur) { S.cur.width = S.cur.height = 0; S.cur = null; }
+  S.blob = null;
+  if (!lines.length) { paint(null); status("Fill in the fields to see a preview."); return; }
+  const c = R.render(lines, { y: S.y, halo: S.halo, tight: false });
+  S.cur = c; paint(c);
+  const miss = S.type === "text" ? [] : R.missing(S.type, S.vals[S.type]);
+  if (miss.length) { status("Needed: " + miss.join(", ")); return; }
+  const out = S.tight ? R.render(lines, { y: S.y, halo: S.halo, tight: true }) : c;
+  const blob = await new Promise((r) => out.toBlob(r, "image/png"));
+  if (out !== c) out.width = out.height = 0;
+  if (my !== token) return;
+  S.blob = blob; S.lines = lines;
+  $("#save").disabled = $("#add").disabled = false;
+  status(`${S.tight ? "Text only" : "2160 × 3840"} · ${(blob.size / 1024).toFixed(0)} KB · ready`);
+}
+
+function paint(c) {
+  const dpr = window.devicePixelRatio || 1, cw = pv.clientWidth || 360;
+  const full = S.view === "full";
+  const ch = full ? Math.round(cw * 16 / 9) : Math.round(cw * 0.5);
+  pv.width = Math.round(cw * dpr); pv.height = Math.round(ch * dpr); pv.style.height = ch + "px";
+  // source rect in frame space (2160x3840); close-up zooms to the text + halo
+  let sx = 0, sy = 0, sw = R.W, sh = R.H;
+  if (!full) {
+    const bb = c ? c.bbox : [R.W * 0.25, S.y * 2 - 150, R.W * 0.75, S.y * 2 + 150];
+    sw = Math.min(R.W, Math.max(R.W * 0.55, (bb[2] - bb[0]) * 1.25, ((bb[3] - bb[1]) * 1.4) * cw / ch));
+    sh = sw * ch / cw;
+    const mx = (bb[0] + bb[2]) / 2, my = (bb[1] + bb[3]) / 2;
+    sx = Math.min(Math.max(0, mx - sw / 2), R.W - sw);
+    sy = Math.min(Math.max(0, my - sh / 2), R.H - sh);
+  }
+  const k = pv.width / sw;
+  pctx.setTransform(1, 0, 0, 1, 0, 0);
+  pctx.fillStyle = { grey: "#7a746a", dark: "#1d1d20", bright: "#e9e7e1", photo: "#333" }[S.bg];
+  pctx.fillRect(0, 0, pv.width, pv.height);
+  pctx.setTransform(k, 0, 0, k, -sx * k, -sy * k);
+  if (S.bg === "photo" && S.photo) {
+    const p = S.photo, s = Math.max(R.W / p.width, R.H / p.height);
+    pctx.drawImage(p, (R.W - p.width * s) / 2, (R.H - p.height * s) / 2, p.width * s, p.height * s);
+  }
+  if (c) { pctx.imageSmoothingQuality = "high"; pctx.drawImage(c, 0, 0); }
+  pctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+/* ───── saving ───── */
+function fileName(lines, type, idx) {
+  const main = (lines.find(([, k]) => k === "main") || lines[0])[0];
+  return `${idx ? String(idx).padStart(2, "0") + "_" : ""}${type}_${R.slug(main)}.png`;
+}
+async function share(files) {
+  if (navigator.canShare && navigator.canShare({ files })) {
+    try { await navigator.share({ files }); return true; }
+    catch (e) { if (e.name === "AbortError") return false; }
+  }
+  for (const f of files) {                       // desktop / fallback
+    const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return true;
+}
+$("#save").onclick = async () => {
+  if (!S.blob) return;
+  const f = new File([S.blob], fileName(S.lines, S.type), { type: "image/png" });
+  if (await share([f])) toast("Saved");
+};
+$("#add").onclick = () => {
+  if (!S.blob) return;
+  S.list.push({ id: ++S.seq, type: S.type, lines: S.lines, blob: S.blob });
+  list(); toast(`Added #${S.list.length}`);
+  if (S.type === "text") S.text = S.text.map(([k]) => [k, ""]);
+  else { S.vals[S.type] = { ...(DEFAULTS[S.type] || {}) }; }
+  fields(); schedule(0);
+  const first = $("#fields input"); if (first) first.focus({ preventScroll: true });
+};
+$("#saveAll").onclick = async () => {
+  if (!S.list.length) return;
+  const files = S.list.map((it, i) => new File([it.blob], fileName(it.lines, it.type, i + 1), { type: "image/png" }));
+  if (await share(files)) toast(`Saved ${files.length}`);
+};
+$("#clear").onclick = () => { if (S.list.length && confirm("Clear today's list?")) { S.list = []; list(); } };
+
+function list() {
+  const L = $("#list");
+  $("#cnt").textContent = S.list.length ? `(${S.list.length})` : "";
+  $("#saveAll").disabled = !S.list.length;
+  $("#saveAll").textContent = S.list.length ? `Save all ${S.list.length} to Photos` : "Save all to Photos";
+  if (!S.list.length) { L.innerHTML = `<div class="empty">Add graphics as you go, then save them all at once.</div>`; return; }
+  L.innerHTML = S.list.map((it, i) => {
+    const main = (it.lines.find(([, k]) => k === "main") || it.lines[0])[0];
+    const rest = it.lines.filter(([s]) => s !== main).map(([s]) => s).join("  ·  ");
+    return `<div class="item"><div class="n">${String(i + 1).padStart(2, "0")}</div>
+      <div class="t"><div class="badge">${TYPES[it.type].label}</div><div>${esc(main)}</div>${rest ? `<div class="s">${esc(rest)}</div>` : ""}</div>
+      <button class="x" data-id="${it.id}">×</button></div>`;
+  }).join("");
+}
+$("#list").addEventListener("click", (e) => {
+  const id = +e.target.dataset.id; if (!id) return;
+  S.list = S.list.filter((it) => it.id !== id); list();
+});
+
+/* ───── paste blocks ───── */
+$("#pasteGo").onclick = async () => {
+  const err = $("#pasteErr"); err.textContent = "";
+  let blocks;
+  try { blocks = R.parse($("#paste").value); } catch (e) { err.textContent = e.message; return; }
+  if (!blocks.length) { err.textContent = "Nothing to add. Start each block with [type]."; return; }
+  const btn = $("#pasteGo"); btn.disabled = true;
+  for (const [i, b] of blocks.entries()) {
+    btn.textContent = `Rendering ${i + 1} / ${blocks.length}…`;
+    const lines = R.build(b.type, b.f);
+    const c = R.render(lines, { y: b.y ?? S.y, halo: b.halo ?? S.halo, tight: S.tight });
+    const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+    c.width = c.height = 0;
+    S.list.push({ id: ++S.seq, type: b.type, lines, blob });
+  }
+  btn.disabled = false; btn.textContent = "Add blocks to list";
+  list(); toast(`Added ${blocks.length}`);
+  $("#paste").value = "";
+};
+
+/* ───── preview + adjust controls ───── */
+function seg(id, key, after) {
+  $(id).addEventListener("click", (e) => {
+    const v = e.target.dataset.v; if (!v) return;
+    if (key === "bg" && v === "photo") { $("#photo").click(); return; }
+    S[key] = v; [...$(id).children].forEach((b) => b.classList.toggle("on", b.dataset.v === v));
+    after();
+  });
+}
+seg("#segView", "view", () => paint(S.cur));
+seg("#segBg", "bg", () => paint(S.cur));
+$("#segSize").addEventListener("click", (e) => {
+  const v = e.target.dataset.v; if (!v) return;
+  S.tight = v === "tight";
+  [...$("#segSize").children].forEach((b) => b.classList.toggle("on", b.dataset.v === v));
+  schedule(0);
+});
+$("#photo").onchange = (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => { S.photo = img; S.bg = "photo"; [...$("#segBg").children].forEach((b) => b.classList.toggle("on", b.dataset.v === "photo")); paint(S.cur); };
+  img.src = URL.createObjectURL(f);
+};
+function adj() { $("#y").value = S.y; $("#halo").value = S.halo; $("#yv").textContent = S.y; $("#hv").textContent = S.halo; }
+$("#y").oninput = (e) => { S.y = +e.target.value; adj(); schedule(); };
+$("#halo").oninput = (e) => { S.halo = +e.target.value; adj(); schedule(); };
+$("#reset").onclick = () => { S.y = R.DEFAULT_Y; S.halo = R.DEFAULT_HALO; adj(); schedule(0); };
+window.addEventListener("resize", () => paint(S.cur));
+
+let tt; function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("on"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("on"), 1600); }
+
+/* ───── boot ───── */
+chips(); fields(); adj(); list();
+Promise.all([document.fonts.load("36px OSReg"), document.fonts.load("36px OSSemi")])
+  .then(() => document.fonts.ready).then(() => schedule(0));
+})();
+</script>
+</body>
+</html>
