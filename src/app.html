@@ -55,6 +55,11 @@ input[type=range] { padding:0; height:30px; background:transparent; border:0; ac
 .val { font: 13px OSSemi; color:var(--gold); }
 .list .item { display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--line); }
 .list .item:last-child { border-bottom:0; }
+.list .item.editing { background:rgba(255,210,74,.09); border-radius:10px; padding-left:8px; padding-right:8px; }
+.e { flex:0 0 auto; background:transparent; border:1px solid var(--line); color:var(--text); border-radius:10px; font:13px OSSemi; padding:9px 12px; }
+.editbar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px; padding:10px 12px; border:1px solid var(--gold); border-radius:12px; background:rgba(255,210,74,.08); font:14px OSSemi; color:var(--gold); }
+.editbar[hidden] { display:none; }
+.editbar button { background:transparent; border:1px solid var(--line); color:var(--text); border-radius:10px; padding:7px 12px; font:13px OSSemi; }
 .list .n { flex:0 0 26px; font: 13px OSSemi; color:var(--dim); }
 .list .t { flex:1; min-width:0; }
 .list .t div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -85,6 +90,7 @@ input[type=range] { padding:0; height:30px; background:transparent; border:0; ac
   <button class="btn primary" id="save" disabled>Save to Photos</button>
   <button class="btn ghost" id="add" disabled>＋ Add to list</button>
 </div>
+<div class="editbar" id="editbar" hidden><span id="editlabel">Editing</span><button id="cancelEdit">Cancel</button></div>
 <div class="status" id="status"></div>
 
 <div class="card" style="margin-top:12px">
@@ -145,7 +151,7 @@ const LOWER = new Set(["time", "sets"]);
 const S = {
   type: "food", vals: {}, text: [["small", ""], ["main", ""], ["small", ""]],
   y: R.DEFAULT_Y, halo: R.DEFAULT_HALO, tight: false, view: "close", bg: "grey", photo: null,
-  cur: null, blob: null, list: [], seq: 0,
+  cur: null, blob: null, list: [], seq: 0, editing: null, saved: null,
 };
 ORDER.forEach((t) => (S.vals[t] = {}));
 const DEFAULTS = {};                                   // ?type.field=value prefills a field
@@ -274,21 +280,63 @@ $("#save").onclick = async () => {
   const f = new File([S.blob], fileName(S.lines, S.type), { type: "image/png" });
   if (await share([f])) toast("Saved");
 };
+function snapshot() {
+  return S.type === "text"
+    ? { type: "text", text: S.text.map(([k, v]) => [k, v]), f: {} }
+    : { type: S.type, f: { ...S.vals[S.type] }, text: null };
+}
+function clearEditor() {
+  if (S.type === "text") S.text = S.text.map(([k]) => [k, ""]);
+  else S.vals[S.type] = { ...(DEFAULTS[S.type] || {}) };
+}
+function editbar() {
+  const i = S.list.findIndex((x) => x.id === S.editing);
+  $("#editbar").hidden = i < 0;
+  $("#editlabel").textContent = i < 0 ? "" : `Editing #${String(i + 1).padStart(2, "0")}`;
+  $("#add").textContent = i < 0 ? "＋ Add to list" : `✓ Update #${String(i + 1).padStart(2, "0")}`;
+}
+function startEdit(id) {
+  const it = S.list.find((x) => x.id === id); if (!it) return;
+  if (!S.editing) S.saved = { y: S.y, halo: S.halo };
+  S.editing = id; S.type = it.type;
+  if (it.type === "text") S.text = it.text.map(([k, v]) => [k, v]);
+  else S.vals[it.type] = { ...it.f };
+  S.y = it.y; S.halo = it.halo; adj();
+  chips(); fields(); list(); editbar(); schedule(0);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function endEdit() {
+  S.editing = null;
+  if (S.saved) { S.y = S.saved.y; S.halo = S.saved.halo; S.saved = null; adj(); }
+  editbar(); list();
+}
 $("#add").onclick = () => {
   if (!S.blob) return;
-  S.list.push({ id: ++S.seq, type: S.type, lines: S.lines, blob: S.blob });
-  list(); toast(`Added #${S.list.length}`);
-  if (S.type === "text") S.text = S.text.map(([k]) => [k, ""]);
-  else { S.vals[S.type] = { ...(DEFAULTS[S.type] || {}) }; }
-  fields(); schedule(0);
+  const data = { ...snapshot(), lines: S.lines, blob: S.blob, y: S.y, halo: S.halo };
+  const it = S.editing && S.list.find((x) => x.id === S.editing);
+  if (it) {
+    Object.assign(it, data);
+    toast(`Updated #${S.list.indexOf(it) + 1}`);
+    endEdit();
+  } else {
+    S.list.push({ id: ++S.seq, ...data });
+    list(); toast(`Added #${S.list.length}`);
+  }
+  clearEditor(); fields(); schedule(0);
   const first = $("#fields input"); if (first) first.focus({ preventScroll: true });
 };
+$("#cancelEdit").onclick = () => { endEdit(); clearEditor(); fields(); schedule(0); };
 $("#saveAll").onclick = async () => {
   if (!S.list.length) return;
   const files = S.list.map((it, i) => new File([it.blob], fileName(it.lines, it.type, i + 1), { type: "image/png" }));
   if (await share(files)) toast(`Saved ${files.length}`);
 };
-$("#clear").onclick = () => { if (S.list.length && confirm("Clear today's list?")) { S.list = []; list(); } };
+$("#clear").onclick = () => {
+  if (S.list.length && confirm("Clear today's list?")) {
+    const was = S.editing; S.list = []; endEdit();
+    if (was) { clearEditor(); fields(); schedule(0); }
+  }
+};
 
 function list() {
   const L = $("#list");
@@ -299,14 +347,19 @@ function list() {
   L.innerHTML = S.list.map((it, i) => {
     const main = (it.lines.find(([, k]) => k === "main") || it.lines[0])[0];
     const rest = it.lines.filter(([s]) => s !== main).map(([s]) => s).join("  ·  ");
-    return `<div class="item"><div class="n">${String(i + 1).padStart(2, "0")}</div>
+    return `<div class="item${it.id === S.editing ? " editing" : ""}"><div class="n">${String(i + 1).padStart(2, "0")}</div>
       <div class="t"><div class="badge">${TYPES[it.type].label}</div><div>${esc(main)}</div>${rest ? `<div class="s">${esc(rest)}</div>` : ""}</div>
-      <button class="x" data-id="${it.id}">×</button></div>`;
+      <button class="e" data-edit="${it.id}">Edit</button>
+      <button class="x" data-del="${it.id}">×</button></div>`;
   }).join("");
 }
 $("#list").addEventListener("click", (e) => {
-  const id = +e.target.dataset.id; if (!id) return;
-  S.list = S.list.filter((it) => it.id !== id); list();
+  const ed = +e.target.dataset.edit, del = +e.target.dataset.del;
+  if (ed) { startEdit(ed); return; }
+  if (!del) return;
+  const was = S.editing === del;
+  S.list = S.list.filter((it) => it.id !== del);
+  if (was) { endEdit(); clearEditor(); fields(); schedule(0); } else { list(); editbar(); }
 });
 
 /* ───── paste blocks ───── */
@@ -322,7 +375,9 @@ $("#pasteGo").onclick = async () => {
     const c = R.render(lines, { y: b.y ?? S.y, halo: b.halo ?? S.halo, tight: S.tight });
     const blob = await new Promise((r) => c.toBlob(r, "image/png"));
     c.width = c.height = 0;
-    S.list.push({ id: ++S.seq, type: b.type, lines, blob });
+    const { _items, y: _y, halo: _h, ...f } = b.f;
+    const text = b.type === "text" ? _items.filter(([k]) => k === "main" || k === "small").map(([k, v]) => [k, v]) : null;
+    S.list.push({ id: ++S.seq, type: b.type, f, text, lines, blob, y: b.y ?? S.y, halo: b.halo ?? S.halo });
   }
   btn.disabled = false; btn.textContent = "Add blocks to list";
   list(); toast(`Added ${blocks.length}`);
